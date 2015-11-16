@@ -1,0 +1,99 @@
+---
+title: "Exploring Cluster Genome Counts"
+author: "Nate Olson"
+date: "November 9, 2015"
+output: html_document
+---
+
+## Objective
+Summarize number of 16S copies per genome and how the copies are distributed in clusters for different clustering threshold values.
+
+Initial analysis for full length 16S sequences
+
+```{r}
+library(magrittr)
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(readr)
+library(ggplot2)
+library(knitr)
+```
+
+### 16S copies per genome
+```{r}
+setwd("/Users/nolson/multicopy_taxa_assignment")
+## note removing rows with gi value as NA - due to carriage returns????
+cluster_df <- read_tsv("refseq_clusters/cluster_genome_count.tsv") %>% filter(!is.na(gi))
+```
+
+```{r}
+copy_count <- cluster_df %>% separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% filter(threshold == "1.00") %>% group_by(gi) %>% summarize(copies = n())
+```
+
+```{r}
+ggplot(copy_count) + geom_bar(aes(x = copies)) + theme_bw()
+```
+
+
+```{r}
+quantile(copy_count$copies)
+```
+75% of the genomes have less than 5 copies
+
+## number of clusters by threshold
+```{r}
+cluster_df %>% separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% group_by(threshold) %>% summarize( count = length(unique(id))) %>% 
+    ggplot()
+```
+
+
+### Number of genomes with copies assigned to multiple clusters
+```{r}
+cluster_counts <- cluster_df %>% 
+    separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% 
+    group_by(threshold, gi) %>% summarize(cl_count = length(unique(cluster)))
+```
+
+Summary plot
+
+```{r}
+ggplot(cluster_counts) + geom_point(aes(x = threshold, y = cl_count),
+                                    position = position_jitter(width = 0.15),
+                                    alpha = 0.25) +
+    theme_bw() + 
+    labs(x = "Cluster Threshold",y = "Clusters per Genome")
+```
+
+Summary table
+
+```{r}
+cluster_counts %>% group_by(threshold, cl_count) %>% summarize(count = n()) %>% spread(threshold, count, fill = 0) %>% kable()
+```
+
+At the genome level only a fraction of the sequences are assigned to different clusters.
+
+#### Number of genomes per cluster
+```{r}
+cluster_genome_counts <- cluster_df %>% separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% group_by(cluster, threshold) %>% summarize(genome_count = length(unique(gi)))
+```
+
+```{r}
+ggplot(cluster_genome_counts) + geom_jitter(aes(x = threshold, y = genome_count), position = position_jitter(width = 0.15)) + scale_y_log10() + theme_bw() + labs(x = "Cluster Threshold", y = "Genomes Per Cluster")
+``` 
+
+Number of clusters with more than one genome
+
+```{r}
+multi_gi <- cluster_genome_counts %>% rowwise() %>% mutate(multi_gi = ifelse(genome_count > 1, 1,0)) %>% group_by(threshold) %>% summarise(prop_multi = sum(multi_gi)/n())
+```
+
+```{r}
+ggplot(multi_gi) + geom_bar(aes(x = threshold, y = prop_multi), stat = "identity")
+```
+
+Conclusion: for most threshold settings clusters contain sequences from more than one genome.
+
+
+### Next steps
