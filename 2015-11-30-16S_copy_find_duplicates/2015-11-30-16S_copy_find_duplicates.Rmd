@@ -1,0 +1,88 @@
+---
+title: "Checking all 16S multi-copy for duplicates"
+author: "Nate Olson"
+date: "November 30, 2015"
+output: html_document
+---
+<!-- Fill in title, author, and date above -->
+
+<!-- Resources for creating Rmarkdown documents
+    https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf
+    https://www.rstudio.com/wp-content/uploads/2015/03/rmarkdown-reference.pdf
+-->
+
+### Purpose
+<!-- Reason for performing the analysis -->
+
+### Apparatus
+#### Computing Environment 
+<!-- System used to run analysis -->
+Nate's NIST laptop
+
+#### Software Versions
+```{r warning=FALSE, message=FALSE}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(magrittr)
+library(knitr)
+library(devtools)
+library(sapkotaUtils)
+```
+
+
+#### Source Data
+Names of source data files and md5 sums for provenance checking
+
+<!-- Name of input data files 
+     Make sure to use full file path names for md5 sums
+-->
+```{r}
+file_dir <- "/Users/nolson/multicopy_taxa_assignment/"
+source_dat_files <- c(
+   seq_names = paste0(file_dir, "refseq_genomes/seq_names.txt"),
+   msa = paste0(file_dir, "infernal_aligned/cmd_line_infernal_1.1.fasta")
+)
+md5table(source_dat_files) %>% kable()
+```
+
+
+### Methods and Results
+<!-- Overview of steps used in analysis.  
+* Analysis pipeline and results.
+* For each step in the analysis
+    * summary of software used
+    * objective
+    * observations
+    * notes
+-->
+Checking for duplicate file names
+```{r}
+read_csv(source_dat_files['seq_names'],col_names = "name") %>% group_by(name) %>% summarise(count = n()) %>% filter(count > 1) %>% kable()
+```
+
+Manually removed duplicates from `refseq_genomes/all_refseq_16S.fasta`
+
+Modifying file names for RAXML - use esl-reformat instead
+biostrings is really slow at printing phylip
+```{r}
+# library(Biostrings)
+# seq_file <- readDNAMultipleAlignment(source_dat_files['msa'])
+# rownames(seq_file) <- paste0(1:nrow(seq_file)," ",
+#                              rownames(seq_file))
+# write.phylip(seq_file,
+#              paste0(source_dat_files['msa'],
+#                     "_renamed.phylip"))
+```
+
+
+### Notes
+* Overall observations and conclusions from the analysis
+* Next steps
+
+### Session information
+```{r}
+devtools::session_info()
+```
+
