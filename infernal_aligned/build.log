@@ -1,0 +1,16 @@
+# cmbuild :: covariance model construction from multiple sequence alignments
+# INFERNAL 1.1.1 (July 2014)
+# Copyright (C) 2014 Howard Hughes Medical Institute.
+# Freely distributed under the GNU General Public License (GPLv3).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# CM file:                                            RF00177.cm
+# alignment file:                                     ../infernal/RF00177.stockholm.txt
+# output directed to file:                            build.log
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+#                                                                      rel entropy
+#                                                                      -----------
+# idx    name                     nseq eff_nseq   alen  clen  bps bifs    CM   HMM description
+# ------ -------------------- -------- -------- ------ ----- ---- ---- ----- ----- -----------
+       1 SSU_rRNA_bacteria          99     1.21   1980  1533  462   31 0.590 0.316 Bacterial small subunit ribosomal RNA
+#
+# CPU time: 25.70u 0.04s 00:00:25.74 Elapsed: 00:00:25.77
