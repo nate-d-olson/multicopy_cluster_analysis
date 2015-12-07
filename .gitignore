@@ -7,3 +7,4 @@ infernal_aligned/parsetrees.txt
 ncbi_taxa_db/gi_taxid_nucl*
 ncbi_taxa_db/*sqlite
 
+.Rproj.user
