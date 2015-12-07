@@ -1,0 +1,159 @@
+---
+title: "Annotating 16S multi-copy dataset clusters"
+author: "Nate Olson"
+date: "November 4, 2015"
+output: html_document
+---
+
+## Objective
+Identify paralogous ambiguous clusters
+* Paralogous clusters - different clusters with 16S copies from the same genome
+* Ambiguous clusters - 16S copies from multiple unrealted taxa (need a better definition)
+
+## Approach
+* assign taxonomy to each source genome
+* annotate clusters based on genome assigned taxonomy
+
+## Getting Taxonomy for Seq Names
+Getting sequence names
+```{r}
+library(Biostrings)
+library(magrittr)
+setwd("~/multicopy_taxa_assignment")
+copy_db <- readDNAStringSet("~/multicopy_taxa_assignment/refseq_clusters/all_refseq_16S.fasta")
+seq_names <- names(copy_db)
+library(stringr)
+nuc_id <- seq_names %>% 
+    str_extract('ref\\|.*\\|') %>% 
+    str_replace("ref","") %>% str_replace_all("\\|","")
+uniq_nuc_id <- unique(nuc_id)
+seq_gi <- seq_names %>% 
+    str_extract('gi\\|.*\\|ref') %>% 
+    str_replace_all("gi\\|","") %>% str_replace_all("\\|ref","")
+uniq_seq_gi <- unique(seq_gi) %>% as.numeric()
+```
+
+```{r}
+library(dplyr)
+ncbi_tax_id <- src_sqlite(path = "/Volumes/Transcend/genomic_purity/data/ncbi_taxa_db/ncbi_taxa.sqlite")
+#, indexes = list(
+#  "gi", "taxid"))
+gi_id <- tbl(ncbi_tax_id,"gi_taxid")
+ncbi_nodes <- tbl(ncbi_tax_id,"nodes")
+ncbi_names <- tbl(ncbi_tax_id,"names")
+```
+
+```{r}
+gi_tbl <- gi_id %>% filter(gi %in% uniq_seq_gi) %>% collect()
+```
+
+index - sqlite tables
+node - parent, rank
+get - rank, and parent, recurse to superkingdom ...
+
+Taxonomic Heirarchy
+```{r}
+root <- FALSE
+tax_ids <- gi_tbl$taxid %>% unique()
+taxonomy_table <- data_frame()
+while(length(tax_ids) > 1){
+    temp_tbl <- ncbi_nodes %>% 
+        filter(tax_id %in% tax_ids) %>% 
+        select(tax_id, parent_id, rank) %>% 
+        collect()
+    tax_ids <- temp_tbl$parent_id %>% unique()
+    taxonomy_table <-  bind_rows(taxonomy_table, temp_tbl)
+}
+```
+
+Getting taxonomic names, only keeping scientific names
+```{r}
+tax_ids <- taxonomy_table$tax_id %>% unique()
+names_table <- filter(ncbi_names, tax_id %in% tax_ids) %>% collect() %>% filter(name_class == "scientific name")
+```
+
+Generating heirarchy table
+```{r}
+library(purrr)
+taxonomy_table  %<>% unique()
+get_heirarchy <- function(query_id, query_lineage, tax_tbl = taxonomy_table){
+    query_lineage <-list()
+    parent <- taxonomy_table %>% filter(tax_id == query_id)
+    taxa_levels <- c("kingdom", "phylum", "class", 
+                     "order", "family", "genus", "species")
+    if(parent$rank %in% taxa_levels){
+        query_lineage[parent$rank] <- parent$tax_id
+    }
+    if(parent$rank == "kingdom" | query_id == "1"){
+        return(as_data_frame(query_lineage))
+    }
+    
+    query_lineage <- c(query_lineage, get_heirarchy(parent$parent_id, query_lineage))
+    return(as_data_frame(query_lineage))
+}
+
+lineage_df <- gi_tbl$taxid %>% unique() %>% map(get_heirarchy)
+lin_df <- lineage_df %>% bind_rows() %>% 
+    mutate(taxid = gi_tbl$taxid %>% unique()) %>% right_join(gi_tbl)
+```
+
+Appending sequence names
+```{r}
+seq_lineage_df <- data_frame(gi = as.integer(seq_gi), seq_names) %>% left_join(lin_df)
+```
+
+## mapping cluster assignments to lineage table
+Data frame with cluster ids and seqs
+```{r}
+library(readr)
+anno_cluster_df <- data_frame()
+for(i in c("1.00", "0.99", "0.97", "0.94", "0.91", "0.88", 
+           "0.85", "0.82", "0.79", "0.76", "0.73", "0.70", 
+           "0.67", "0.64", "0.61")){
+    cluster_file <- paste0("refseq_clusters/all_refseq_16S_",i,".cluster")
+    cluster_set <- read_lines(cluster_file, skip = 1) %>%
+        as.list() %>% flatmap(str_split,"\t")
+    names(cluster_set) <- paste0("cluster_",i,"_",1:length(cluster_set))
+    cluster_names <- cluster_set  %>% map(length)  %>% 
+        unlist()  %>% rep(names(cluster_set), .)
+    cluster_seqs <- cluster_set  %>% as_vector(.type = "character")
+    cluster_df <- data_frame(cluster = cluster_names, seqs = cluster_seqs)
+    anno_cluster_df <- seq_lineage_df %>% 
+        mutate(seqs= str_replace(seq_names, " .*","")) %>% 
+        right_join(cluster_df) %>% 
+        bind_rows(anno_cluster_df)
+}
+
+glimpse(anno_cluster_df)
+write_csv(anno_cluster_df, "~/Desktop/clusters_with_taxonomic_annotation.csv")
+```
+
+Combining taxa annotation and cluster id
+```{r}
+
+```
+
+Number of gis per cluster
+```{r}
+annotated_cluster %>% group_by(cluster) %>% summarize(count = n(), gi_count = length(unique(gi)))
+```
+
+Number of clusters per gi
+```{r}
+## number of 16S copies per genome
+annotated_cluster %>% group_by(gi) %>% summarize(count = n()) %>% .$count %>% table()
+
+## number of cluster per genome
+annotated_cluster %>% group_by(gi) %>% summarize(count = length(unique(cluster))) %>% .$count %>% table()
+```
+
+## Next Steps
+* calculate diversity per taxa?
+* generate summary plots
+* modify code for batch processing
+
+## Summary Plots
+1. from nuc_id - number of 16S copies per genome
+2. 16S copy number by taxonomic level
+3. number of gi per cluster
+
