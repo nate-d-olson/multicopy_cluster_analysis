@@ -1,0 +1,260 @@
+---
+title: "Exploring Cluster Genome Counts"
+author: "Nate Olson"
+date: "November 9, 2015"
+output: html_document
+---
+
+## Objective
+Summarize number of 16S copies per genome and how the copies are distributed in clusters for different clustering threshold values.
+
+Initial analysis for full length 16S sequences
+
+```{r}
+library(magrittr)
+library(stringr)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(readr)
+library(ggplot2)
+library(knitr)
+```
+
+### 16S copies per genome
+```{r}
+#setwd("/home/eertel/Documents/CMSC701/Project/")
+## note removing rows with gi value as NA - due to carriage returns????
+cluster_df <- read_tsv("refseq_clusters/cluster_genome_count.tsv") %>% filter(!is.na(gi))
+```
+
+### Adding Taxonomic Identifications
+```{r}
+taxaID <- read_csv("refseq_clusters/clusters_with_taxonomic_annotation.csv") %>% filter(!is.na(gi))
+#taxaIDs[intersect(taxaID$gi,cluster_df$gi),]
+```
+
+```{r}
+taxa99 <- taxaID[which(taxaID$)]
+#taxaIDs[intersect(taxaID$gi,cluster_df$gi),]
+```
+
+```{r}
+taxaClustCounts <- taxaID %>% separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% filter(threshold == "1.00") %>% group_by(gi) %>% summarize(copies = n())
+```
+
+```{r}
+#copy_count <- cluster_df %>% separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% filter(threshold == "1.00") %>% group_by(gi) %>% summarize(copies = n())
+```
+
+```{r}
+ggplot(copy_count) + geom_bar(aes(x = copies)) + theme_bw()
+```
+
+
+```{r}
+quantile(copy_count$copies)
+```
+75% of the genomes have less than 5 copies
+
+## number of clusters by threshold
+```{r}
+cluster_df %>% separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% group_by(threshold) %>% summarize( count = length(unique(id))) %>% ggplot()
+```
+
+### Loading File With Taxonomic Identifications
+```{r}
+taxaID <- read_csv("refseq_clusters/clusters_with_taxonomic_annotation.csv") %>% filter(!is.na(gi))
+```
+
+```{r}
+taxa99 <- taxaID[which(taxaID$)]
+#taxaIDs[intersect(taxaID$gi,cluster_df$gi),]
+```
+
+
+## number of genuses per cluster: threshold = 0.99
+```{r}
+clustersSep <- c(taxaID %>% separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% group_by(threshold))
+taxaID$id <- clustersSep$id
+taxa99 <- taxaID[which(clustersSep$threshold=="0.99"),]
+#a %>% group_by(threshold)
+taxa99summary <- taxa99 %>% group_by(id) %>% summarize(count = length(unique(genus)))
+hist(taxa99summary$count,xlab = "Unique Genuses Per OTU? OTUs per Genus?",main="Distribution of Genuses in Clusters at Threshold 0.99")
+```
+
+total number of clusters, confounded clusters, and max #genuses/cluster
+
+```{r}
+length((taxa99summary$count))
+sum(taxa99summary$count>1)
+max(taxa99summary$count)
+```
+
+#Attempt to classify organisms based on subset of genomes
+```{r}
+
+n <- length(unique(taxa99$gi))
+idx <- sample(c(1:n),replace = F)
+train <- unique(taxa99$gi)[1:as.integer(0.7*n)]
+test <- unique(taxa99$gi)[as.integer(0.7*n+1):n]
+taxa99train = taxa99[which(taxa99$gi %in% train), ]
+taxa99test = taxa99[which(taxa99$gi %in% test), ]
+#only considers test taxa which are present in training set
+taxa99test = taxa99test[which(taxa99test$genus %in% taxa99train$genus),]
+taxa99test = taxa99test[which(taxa99test$cluster %in% taxa99train$cluster),]
+
+#generates random counts for each taxa
+taxa99test$count = 0
+giCounts <- cbind(unique(taxa99test$gi),as.integer(250*runif(length(unique(taxa99test$gi)))))
+
+for(i in c(1:dim(giCounts)[1])){taxa99test$count[which(taxa99test$gi==giCounts[i,1])]<-giCounts[i,2]}
+
+write_csv(x = taxa99test,path = "/home/eertel/Documents/CMSC701/test.csv")
+write_csv(x = taxa99train,path = "/home/eertel/Documents/CMSC701/train.csv")
+unique(taxa99train$genus)
+unique(taxa99test$cluster)
+```
+
+##Transplant this into an R script that can be run from command line
+```{r}
+#install.packages("lpSolve")
+library(lpSolve)
+
+#parse inputs
+args=commandArgs(trailingOnly = T)
+trainFile = args[1]
+testFile = args[2]
+outFile = args[3]
+taxa99train <- read_csv(trainFile)
+taxa99test <- read_csv(testFile)
+
+#read the test and train documents
+classMat <- matrix(0,length(unique(taxa99train$species)),length(unique(taxa99train$cluster)))
+species <- unique(taxa99train$species)
+clusters <- unique(taxa99train$cluster)
+genus <- unique(taxa99train$genus)
+colnames(taxa99train)
+#add counts for each cluster and species combination
+for(i in c(1:dim(taxa99train)[1])){
+  classMat[which(species==taxa99train$species[i]),which(clusters==taxa99train$cluster[i])] <- 1 + classMat[which(species==taxa99train$species[i]),which(clusters==taxa99train$cluster[i])]
+}
+
+testClusters = rep(0,length(clusters))
+for(i in c(1:length(taxa99test$cluster))){
+  idx = which(clusters == taxa99test$cluster[i])
+  print(idx)
+  testClusters[idx] = testClusters[idx] + taxa99test$count[i]
+}
+
+a<- lp(direction = "min",objective.in = rep(1,length(species)),const.mat =t(classMat),const.dir = ">=",const.rhs = testClusters)
+sum(a$solution)
+sum(taxa99test$count)
+outMat <- cbind(genus,rep(0,length(genus)))
+comparison <- cbind(genus,rep(0,length(genus)))
+for(i in 1:length(species)){ #taxa99test$genus[
+  pos <- which(taxa99test$species==species[i])[1]
+  gns <- taxa99test$genus[pos]
+  outMat[which(genus==gns),2] <- outMat[which(genus==gns),2] + a$solution[which(species==taxa99test$species[pos])]
+                                                                          
+  comparison[which(genus==gns),2] <- outMat[which(genus==gns),2] + a$solution[which(species==taxa99test$species[pos])]
+}
+sum((comparison[,2]-outMat[,2])^2)/415
+
+colnames(outMat) <- c("genus",'counts')
+write_csv(x = outMat,outFile)
+```
+
+#Compare calculated species counts and the species counts used to generate the data set.
+```{r}
+outMat <- cbind(outMat, taxa99$genus[which(species %in% taxa99$species)])
+```
+
+
+## number of genuses per cluster: threshold = 0.97
+```{r}
+taxa97 <- taxaID[which(clustersSep$threshold=="0.97"),]
+#a %>% group_by(threshold)
+taxa97summary <- taxa97 %>% group_by(id) %>% summarize(count = length(unique(species)))
+hist(taxa97summary$count[which(taxa97summary$count < 800)],xlab = "Unique Genuses Per OTU",main="Distribution of Genuses in Clusters at Threshold 0.97")
+```
+
+## number of genuses per cluster: threshold = 0.94
+```{r}
+taxa94 <- taxaID[which(clustersSep$threshold=="0.94"),]
+#a %>% group_by(threshold)
+taxa94summary <- taxa94 %>% group_by(id) %>% summarize(count = length(unique(species)))
+hist(taxa94summary$count[which(taxa94summary$count < 100)],xlab = "Unique Genuses Per OTU",main="Distribution of Genuses in Clusters at Threshold 0.94")
+```
+
+## number of genuses per cluster: threshold = 1
+```{r}
+taxa100 <- taxaID[which(clustersSep$threshold=="1.00"),]
+#a %>% group_by(threshold)
+taxa100summary <- taxa100 %>% group_by(id) %>% summarize(count = length(unique(family)))
+hist(taxa100summary$count,xlab = "Unique Genuses Per OTU",main="Distribution of Genuses in Clusters at Threshold 1.00")
+```
+### Number of genomes with copies assigned to multiple clusters
+```{r}
+cluster_counts <- cluster_df %>% 
+    separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% 
+    group_by(threshold, gi) %>% summarize(cl_count = length(unique(cluster)))
+```
+
+Summary plot
+
+```{r}
+ggplot(cluster_counts) + geom_point(aes(x = threshold, y = cl_count),
+                                    position = position_jitter(width = 0.15),
+                                    alpha = 0.25) +
+    theme_bw() + 
+    labs(x = "Cluster Threshold",y = "Clusters per Genome")
+```
+
+Summary table
+
+```{r}
+cluster_counts %>% group_by(threshold, cl_count) %>% summarize(count = n()) %>% spread(threshold, count, fill = 0) %>% kable()
+```
+
+At the genome level only a fraction of the sequences are assigned to different clusters.
+
+#### Number of genomes per cluster
+```{r}
+cluster_genome_counts <- cluster_df %>% separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% group_by(cluster, threshold) %>% summarize(genome_count = length(unique(gi)))
+```
+
+```{r}
+cluster_genome_counts_2 <- cluster_df %>% separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% group_by(cluster, threshold) %>% summarize(genome_count = length((gi)))
+```
+
+```{r}
+ggplot(cluster_genome_counts) + geom_jitter(aes(x = threshold, y = genome_count), position = position_jitter(width = 0.15)) + scale_y_log10() + theme_bw() + labs(x = "Cluster Threshold", y = "Genomes Per Cluster")
+``` 
+
+Number of clusters with more than one genome
+
+```{r}
+multi_gi <- cluster_genome_counts %>% rowwise() %>% mutate(multi_gi = ifelse(genome_count > 1, 1,0)) %>% group_by(threshold) %>% summarise(prop_multi = sum(multi_gi)/n())
+```
+
+```{r}
+ggplot(multi_gi) + geom_bar(aes(x = threshold, y = prop_multi), stat = "identity")
+```
+
+```{r}
+cl_99 = cluster_counts[which(cluster_counts$threshold=='0.99'),]
+plot(cl_99$cl_count,copy_count$copies)
+par(mfrow=c(3,2))
+hist(copy_count$copies[which(cl_99$cl_count==6)],breaks = 8,main='Number of genomes grouped in 6 clusters, by copy number; Threshold = 0.99',xlab='Copy Number')
+# which(cl_99$cl_count == 5)
+hist((cluster_genome_counts$genome_count[which(cluster_genome_counts$threshold == "0.97")]),ylab = "log of frequency", main = 'Histogram of Genomes Per Cluster, thresh = 0.97')
+```
+
+Conclusion: 
+- for most threshold settings clusters contain sequences from more than one genome
+- at high thresholds, many genomes are distributed between 2 or more clusters.
+
+question: how many clusters does each genome appear in?
+
+### Next steps
