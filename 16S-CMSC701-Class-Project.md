@@ -194,6 +194,7 @@ done
 
 Infernal 
 
+## 11-30-2015
 ### Creating taxonomy database
 * using taxtastic python package to install 
     - http://fhcrc.github.io/taxtastic
@@ -239,3 +240,16 @@ ERROR: Sequence ID.4755 consists entirely of undetermined values which will be t
     * completed after about 3 hours
     * moved files to `infernal_raxml_tree`
 + Next step - generate distance matrix from tree using `cophenetic.phylo` in the R ape package
+
+
+## 12/2/2015
+* Organize code
+* Generate new figures
+* Better characterize problem
+* Looking at diversity levels
+* Defining clustering threshold and taxonomic relationship
+
+Issues
+- Outliers: Potentially use score in infernal_aligned/score.txt to validate and remove
+- 
+
