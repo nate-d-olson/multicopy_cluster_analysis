@@ -5,6 +5,8 @@ date: "December 7, 2015"
 output: 
   pdf_document: 
     fig_caption: yes
+    fig_height: 4
+    fig_width: 4
 bibliography: bibliography.bib
 ---
 
