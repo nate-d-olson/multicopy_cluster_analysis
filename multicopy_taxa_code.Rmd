@@ -6,7 +6,15 @@ output: html_document
 bibliography: bibliography.bib
 ---
 
-## Methods
+Code used to generate 16S rRNA multi-copy sequence database and database analysis.  
+
+__Method Procedures__
+
+* Obtain genomes from RefSeq database and extract 16S rRNA sequences.  
+* Cluster 16S rRNA gene sequences at a range of threshold values.  
+* Annotated extracted sequences with taxonomic information.  
+* Perform multiple sequence alignment and construct a phlyogenetic tree.  
+
 ### Generating 16S Copy Database
 * Downloaded reference genomes from NCBI RefSeq (ftp://ftp.ncbi.nlm.nih.gov/genomes/Bacteria)
 
@@ -43,6 +51,7 @@ do
             > all_refseq_16S_$i.cluster
 done
 ```
+The resulting cluster files were combined in to a single file for use in exploratory data analysis. 
 
 ### Cluster Taxonomic Annotation
 The 16S rRNA clusters were then annotated in R using the following procedure;
@@ -57,7 +66,8 @@ The 16S rRNA gene sequences were annotated using the NCBI taxonomy database. An 
 taxit new_database -d ncbi_taxa_db.sqlite
 ```
 
-#### Extracting GIs
+#### Sequence Taxonomic Annotation
+Extraction GI (genome id) from sequence names
 
 ```{r eval=FALSE}
 library(Biostrings)
@@ -75,6 +85,8 @@ seq_gi <- seq_names %>%
     str_replace_all("gi\\|","") %>% str_replace_all("\\|ref","")
 uniq_seq_gi <- unique(seq_gi) %>% as.numeric()
 ```
+
+Retrieving taxonomic information for sequence gi's.
 
 ```{r eval=FALSE}
 library(dplyr)
@@ -108,6 +120,7 @@ tax_ids <- taxonomy_table$tax_id %>% unique()
 names_table <- filter(ncbi_names, tax_id %in% tax_ids) %>% collect() %>% filter(name_class == "scientific name")
 ```
 
+Generating data frame with taxonomic heirarchy for sequence gi's.
 ```{r eval=FALSE}
 library(purrr)
 taxonomy_table  %<>% unique()
@@ -161,13 +174,12 @@ for(i in c("1.00", "0.99", "0.97", "0.94", "0.91", "0.88",
 
 glimpse(anno_cluster_df)
 ## Writing annotated clusters to file
-write_csv(anno_cluster_df, "~/Desktop/clusters_with_taxonomic_annotation.csv")
+write_csv(anno_cluster_df, "clusters_with_taxonomic_annotation.csv")
 ```
 
 
 ### Multiple Sequence Alignment and Phylogenetic Analysis
-Multiple sequence alignment and phylogeny reconstruction methods used were based on thoes use in __REF__
-* Multiple sequence alignment performed using infernal [@Nawrocki2013] using the reference alignment for bacterial small subunit rRNA [http://rfam.xfam.org](http://rfam.xfam.org/family/SSU_rRNA_bacteria?tab=alignBlock#tabview=tab2). 
+Multiple sequence alignment and phylogeny reconstruction methods used were based on thoes use in [@Kembel2012]. Multiple sequence alignment performed using infernal [@Nawrocki2013] using the reference alignment for bacterial small subunit rRNA [http://rfam.xfam.org](http://rfam.xfam.org/family/SSU_rRNA_bacteria?tab=alignBlock#tabview=tab2). 
 
 ```
 cmalign --verbose --cpu 7 --mxsize 5000 \
@@ -177,8 +189,7 @@ cmalign --verbose --cpu 7 --mxsize 5000 \
         -o ../infernal_aligned/cmd_line_infernal_1.1.fasta \
         ../remove_replicate_seqs/no_dups.fasta
 ```
-
-* Generation of phlyogenetic tree using RAxML (http://sco.h-its.org/exelixis/web/software/raxml/index.html)[@Stamatakis2014], based on methods used by [@Kembel2012].
+Generation of phlyogenetic tree using RAxML (http://sco.h-its.org/exelixis/web/software/raxml/index.html)[@Stamatakis2014], based on methods used by [@Kembel2012].
 
 ```
 # converting file format
