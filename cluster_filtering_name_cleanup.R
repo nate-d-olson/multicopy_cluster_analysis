@@ -58,3 +58,5 @@ deduped_ids <- cluster_df2 %>% filter(dedup == 0)  %>%
 cluster_df3 <- cluster_df2 %>% left_join(deduped_ids) %>% select(seqs, new_names, reduced, dedup, rep_name)
 
 write_tsv(cluster_df3, "name_key.tsv")
+
+

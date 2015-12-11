@@ -35,18 +35,11 @@ Include some kind of results - 5% of ambiguous clusters
 As a initial attempt to develop a method that not only corrects for copy number but also taxonomic classification, we applied a simple set of linear constraints.  The linear constriants were unable to model the copy number mixed taxonomy clusters, we conclude the report with a discussion of other potential models that can be applied to address this issue.
 
 ## Introduction
-Surveys of microbial communities aim to quantify the abundance of constituent microbes through the measurement of amplified segments of genomic DNA. Genes that produce ribosomal RNA, specifically the 16S rRNA sub-sequence, are favored targets for amplification and measurement because their high degree of conservation makes these genes an attractive basis for phylogenetic analysis and taxonomic identification. Thus, these genes are generally favored over other possible sequences despite disadvantages including, __NEED TO STATE DISADVANTAGES__  [@Vos2012]. In practice, measured sequences are clustered by similarity and these clusters are given a taxonomic identification. Edit distance, or the number of changes required to convert one sequence into another, is useful as a metric of pairwise similarity [@Ghodsi2011]. Clusters are commonly termed as operational taxonomic units (OTUs); OTUs are considered to be proxies for organismal abundance [@Wooley2010].
+Surveys of microbial communities aim to quantify the abundance of constituent microbes through the measurement of amplified segments of genomic DNA. Genes that produce ribosomal RNA, specifically the 16S rRNA sub-sequence, are favored targets for amplification and measurement because their high degree of conservation makes these genes an attractive basis for phylogenetic analysis and taxonomic identification. Thus, these genes are generally favored over other possible sequences despite disadvantages including, multiple gene copies within a genome and taxonomic ambiguity due to horizontal gene transfer [@Vos2012].
 
-However, 16S rRNA sequences are known to be present in multiple copies [@Pei2010] and the presence of paralogous sequences presents the possibility that distantly related sequences may be identified as highly similar [@Koeppel2013]. 
-__Issue with horizontal gene transfer__
-A number of issues arise from this fact. Firstly, a single organism may be counted multiple times in many unique clusters. Secondly, paralogous (XXX) genes present in multiple species may cluster together, confounding identification; genes from species A may be labeled as species B if both map to a cluster labeled with the taxonomic information of species B.
+16S rRNA metagneomic datasets are commonly analyzed by clustering sequences based on a defined similarity. Edit distance, or the number of changes required to convert one sequence into another, is useful as a metric of pairwise similarity [@Ghodsi2011]. Clusters are defined as OTU, operational taxonomic units, and OTU counts are the number of sequences assigned to a cluster. Clusters are commonly termed as operational taxonomic units (OTUs); OTUs are considered to be proxies for organismal abundance [@Wooley2010]. Multiple 16S rRNA gene copies will bias the OTU counts as the number of sequences is not equivalent to the abundance of cells within the population being sampled assigned to the cluster [@Kembel2012]. Databases have been developed to characterize the number of gene copies per prokaryotic genome have been developed [@Stoddard2014,@Perisin2015], however these databases do not include the 16S rRNA gene copy sequences. A number of methods to normalize the OTU count values based on copy number estimates have been developed [@Kembel2012,@Angley2014,@Perisin2015]. All of these methods use a single copy number correction value for individual OTUs, therefore bacterial strains with different copy numbers assigned to a single OTU can bias the correction factor. The mutiple gene copy number and diversity of the gene copies within a genome either due to mutations or horizontal gene transfer [@Pei2010,@Koeppel2013] futher challenges copy number correction as assignment of gene copies to multiple clusters is not accounted for.  Additionally, due to horizontal gene transfer a 16S rRNA gene copy is a genome can be more similar to a 16S rRNA gene from a unrealted taxa than to other gene copies within the same genome.  No cluster taxonomic annotation methods take account for single genome multiple cluster assignment.
 
-__Potential diagram of copy number issue__
-
-* Other studies that have characterized multi-copies
-    * 
-* Available methods correcting for gene copy number
-
+To address this issue we have developed a 16S rRNA gene copy sequence database.  The extent to whic h the number of gene copies per genome assigned to a cluster and number of clusters individual genomes were assigned was characterized using the gene copy sequence database.  We then attempted to develop a new method for copy number correction that accounts for the different numbers of assigned gene copies per cluster and genomes with multiple cluster assignments.  
 
 ## Methods
 We downloaded 2943 microbial genomes and their taxonomic information from NCBI RefSeq (ftp://ftp.ncbi.nlm.nih.gov/genomes/Bacteria) [@Pruitt2012]. 16S rRNA gene sequences were extracted from the genomes using rnammer (http://www.cbs.dtu.dk/cgi-bin/sw_request?rnammer)[@Lagesen2007]. The extracted 16S rRNA genes were clustered with dnaclust [@Ghodsi2011]. THe sequences were clustered for a range of threshold values, where similarity scores for all pairwise comparisons of sequences within a cluster must be above the threshold value. Similarity score equals 1 - (edit distance)/length(shortest string), and ranges from 0 to 1. Typical threshold values used in 16S rRNA metagenomic studies range from 0.95 to 0.99; however, we investigate thresholds as low as 0.61 and as high as 1.00. Exploratory data analysis was performed in R.
@@ -140,7 +133,7 @@ cluster_df_ambig_prop <- cluster_df_ambig %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, fig.cap="Proportion of genomes assigned to multiple clusters by clustering threshold."}
-cluster_df_ambig_subset %>% 
+cluster_df_ambig_prop %>% 
     filter(threshold %in% c("0.70", "0.85", "0.91", "0.94", "0.97", "0.99")) %>% 
     ggplot() + 
         geom_point(aes(x = threshold, y = count, color = factor(n_assigned), 
@@ -211,7 +204,7 @@ name_key <- read_tsv("name_key.tsv") %>% select(seqs, rep_name)
 cluster_97_name_key <- cluster_df_anno_labled %>% left_join(name_key)
 tree2 <- drop.tip(tree, c("ID.2237","ID.2946","ID.1312","ID.1795","ID.891",
                           "ID.2838","ID.569","ID.1459", "ID.4043"))
-ambig_node_labels <- cluster_97_name_key %>% filter(ambig == "multiple", "single") %>% 
+ambig_node_labels <- cluster_97_name_key %>% filter(ambig == "multiple") %>% 
     .$rep_name %>% unique()
 non_ambig_node_labels <- cluster_97_name_key %>% filter(ambig != "multiple") %>% 
     .$rep_name %>% unique()
@@ -223,7 +216,7 @@ The phylogenetic distribution of ambiguous clusters. When clustering at the 0.97
 #plot(tree)
 cols <- rainbow_hcl(2)
 tree3 <- groupOTU(tree2, focus=ambig_node_labels)
-ggtree(tree3, layout="circular", aes(color=group)) + scale_color_manual(values = cols, breaks=1:2, labels=c("Ambiguous"))+ 
+ggtree(tree3, layout="circular", aes(color=group)) + scale_color_manual(values = cols, breaks=1:2, labels=c("Ambiguous","Defined"))+ 
     theme(legend.position="bottom")
 ```
 
@@ -233,7 +226,7 @@ A number of approaches may use reference-based 16S multicopy information to guid
  Equation (XXX): A simple linear relationship between 16S rRNA copy and species count underlies the physical system
 Organism identification could simply be treated as a linear optimization problem under these conditions if a suitable objective function c is defined. 
 
-However, several major shortcomings hinder the success of this naive approach. PCR amplification is not uniform or linear, and so certain sequences will be overrepresented in such a way that the linear relationships no longer hold. In addition, the number of different OTUs detected is known to be a function of sequencing depth (Paulson et. al., 2013). Finally, the prediction of species counts is biased by the numbers and types of species present in the GenBank reference database. 
+However, several major shortcomings hinder the success of this naive approach. PCR amplification is not uniform or linear, and so certain sequences will be overrepresented in such a way that the linear relationships no longer hold. In addition, the number of different OTUs detected is known to be a function of sequencing depth [@Paulson2013]. Finally, the prediction of species counts is biased by the numbers and types of species present in the GenBank reference database. 
 
 An alternative approach is to use 
 
