@@ -6,7 +6,7 @@ output:
   pdf_document: 
     fig_caption: yes
     fig_height: 4
-    fig_width: 4
+    fig_width: 5
 bibliography: bibliography.bib
 ---
 
@@ -19,6 +19,7 @@ library(purrr)
 library(readr)
 library(ggplot2)
 library(knitr)
+library(kfigr)
 library(ape)
 library(ggtree)
 library(colorspace)
@@ -39,7 +40,7 @@ As a initial attempt to develop a method that not only corrects for copy number 
 ## Introduction
 Surveys of microbial communities aim to quantify the abundance of constituent microbes through the measurement of amplified segments of genomic DNA. Genes that produce ribosomal RNA, specifically the 16S rRNA sub-sequence, are favored targets for amplification and measurement because their high degree of conservation makes these genes an attractive basis for phylogenetic analysis and taxonomic identification. Thus, these genes are generally favored over other possible sequences despite disadvantages including, multiple gene copies within a genome and taxonomic ambiguity due to horizontal gene transfer [@Vos2012].
 
-16S rRNA metagneomic datasets are commonly analyzed by clustering sequences based on a defined similarity. Edit distance, or the number of changes required to convert one sequence into another, is useful as a metric of pairwise similarity [@Ghodsi2011]. Clusters are defined as OTU, operational taxonomic units, and OTU counts are the number of sequences assigned to a cluster. Clusters are commonly termed as operational taxonomic units (OTUs); OTUs are considered to be proxies for organismal abundance [@Wooley2010]. Multiple 16S rRNA gene copies will bias the OTU counts as the number of sequences is not equivalent to the abundance of cells within the population being sampled assigned to the cluster [@Kembel2012]. Databases have been developed to characterize the number of gene copies per prokaryotic genome have been developed [@Stoddard2014,@Perisin2015], however these databases do not include the 16S rRNA gene copy sequences. A number of methods to normalize the OTU count values based on copy number estimates have been developed [@Kembel2012,@Angley2014,@Perisin2015]. All of these methods use a single copy number correction value for individual OTUs, therefore bacterial strains with different copy numbers assigned to a single OTU can bias the correction factor. The mutiple gene copy number and diversity of the gene copies within a genome either due to mutations or horizontal gene transfer [@Pei2010,@Koeppel2013] futher challenges copy number correction as assignment of gene copies to multiple clusters is not accounted for.  Additionally, due to horizontal gene transfer a 16S rRNA gene copy is a genome can be more similar to a 16S rRNA gene from a unrealted taxa than to other gene copies within the same genome.  No cluster taxonomic annotation methods take account for single genome multiple cluster assignment.
+16S rRNA metagneomic datasets are commonly analyzed by clustering sequences based on a defined similarity. Edit distance, or the number of changes required to convert one sequence into another, is useful as a metric of pairwise similarity [@Ghodsi2011]. Clusters are defined as OTU, operational taxonomic units, and OTU counts are the number of sequences assigned to a cluster. Clusters are commonly termed as operational taxonomic units (OTUs); OTUs are considered to be proxies for organismal abundance [@Wooley2010]. Multiple 16S rRNA gene copies will bias the OTU counts as the number of sequences is not equivalent to the abundance of cells within the population being sampled assigned to the cluster [@Kembel2012]. Databases have been developed to characterize the number of gene copies per prokaryotic genome have been developed [@Stoddard2014; @Perisin2015], however these databases do not include the 16S rRNA gene copy sequences. A number of methods to normalize the OTU count values based on copy number estimates have been developed [@Kembel2012; @Angly2014; @Perisin2015]. All of these methods use a single copy number correction value for individual OTUs, therefore bacterial strains with different copy numbers assigned to a single OTU can bias the correction factor. The mutiple gene copy number and diversity of the gene copies within a genome either due to mutations or horizontal gene transfer [@Pei2010; @Koeppel2013] futher challenges copy number correction as assignment of gene copies to multiple clusters is not accounted for.  Additionally, due to horizontal gene transfer a 16S rRNA gene copy is a genome can be more similar to a 16S rRNA gene from a unrealted taxa than to other gene copies within the same genome.  No cluster taxonomic annotation methods take account for single genome multiple cluster assignment.
 
 To address this issue we have developed a 16S rRNA gene copy sequence database.  The extent to whic h the number of gene copies per genome assigned to a cluster and number of clusters individual genomes were assigned was characterized using the gene copy sequence database.  We then attempted to develop a new method for copy number correction that accounts for the different numbers of assigned gene copies per cluster and genomes with multiple cluster assignments.  
 
@@ -61,34 +62,34 @@ copy_count <- cluster_df %>%
     group_by(gi) %>% summarize(copies = n())
 ```
 
-A database of 16S rRNA gene copy sequences was generated by extracting 16S rRNA gene sequences from all closed bacterial genomes in the NCBI RefSeq database.  Number of 16S rRNA gene copies per genome ranged from `r min(copy_count$copies)` to `r max(copy_count$copies)` with a median of `r median(copy_count$copies)`. The distribution of 16S rRNA gene copy numbers agrees with previous studies [@Angley,@Vetrovsky], exluding a genome with 16S rRNA gene copies. Only a single method was used to identify 16S rRNA gene copy sequences and therefore may contain sequences that were incorrectly identified as 16S rRNA genes. Therefore the results below are presented as a proof of concept. A more rigorus approach to generating the sequence copy database similar to that used in Angly et al. (2014) would help validate the database. 
+A database of 16S rRNA gene copy sequences was generated by extracting 16S rRNA gene sequences from all closed bacterial genomes in the NCBI RefSeq database.  Number of 16S rRNA gene copies per genome ranged from `r min(copy_count$copies)` to `r max(copy_count$copies)` with a median of `r median(copy_count$copies)` (`r figr(label = "copyDist", prefix = TRUE, link = TRUE, type = "Figure")`). The distribution of 16S rRNA gene copy numbers agrees with previous studies [@Angly2014; @Vetrovsky2013], exluding a genome with 16S rRNA gene copies. Only a single method was used to identify 16S rRNA gene copy sequences and therefore may contain sequences that were incorrectly identified as 16S rRNA genes, as indicated by outliers in the database phylogenetic tree (`r figr(label = "fullTree", prefix = TRUE, link = TRUE, type = "Figure")`). Therefore the results below are presented as a proof of concept. A more rigorus approach to generating the sequence copy database similar to that used in Angly et al. (2014) would help validate the database. 
 
-```{r echo=FALSE, message=FALSE, fig.cap="Distribution in the number of gene copies present in a bacterial genome."}
+```{r copyDist, anchor = "Figure", echo=FALSE, message=FALSE, fig.cap="Distribution in the number of gene copies present in a bacterial genome.", fig.height=3,fig.width=3}
 ## Potentially drop plot, try to incorporate results into other figure
 ggplot(copy_count) + geom_bar(aes(x = copies)) + 
     theme_bw() + labs(y = "Number of Genomes", x = "16S rRNA Gene Copies")
 ```
 
-```{r echo=FALSE, message=FALSE, fig.cap="Phylogeny of 16S rRNA gene copy database used in this study."}
+```{r fullTree, anchor = "Figure", echo=FALSE, message=FALSE, fig.cap="Phylogeny of 16S rRNA gene copy database used in this study.", fig.height=6,fig.width=6}
 tree <- read.tree("infernal_raxml_tree/RAxML_result.infernal_16S_tree")
 ggtree(tree, layout="circular")
 ```
 
 ### Clustering
-The extracted 16S rRNA genes were clustered with dnaclust using a range of threshold values from 1.00 (identical gene sequences) to 0.61 (sequences with 61% similarity). For lower clustering (< 0.73) thresholds the majority of the sequences were assigned to a single cluster.
+The extracted 16S rRNA genes were clustered with dnaclust using a range of threshold values from 1.00 (identical gene sequences) to 0.61 (sequences with 61% similarity). For lower clustering (< 0.73) thresholds the majority of the sequences were assigned to a single cluster (`r figr(label = "clusterSize", prefix = TRUE, link = TRUE, type = "Figure")`).
 
 ```{r echo = FALSE}
 cluster_df_size <- cluster_df %>% group_by(threshold, id) %>% summarise(size = n()) 
 ```
 
-```{r echo=FALSE, message=FALSE, fig.cap="Distribution of cluster size, number of sequences assigned to a cluster, by clustering threshold."}
+```{r clusterSize, anchor = "figure", echo=FALSE, message=FALSE, fig.cap="Distribution of cluster size, number of sequences assigned to a cluster, by clustering threshold.", fig.height=4,fig.width=5}
 ggplot(cluster_df_size) + geom_boxplot(aes(x = threshold, y = size)) + 
     scale_y_log10() + theme_bw() + 
     labs(x = "Clustering Threshold", y = "Sequences per Cluster")
 ```
 
 ### Cluster Copy Number 
-The number of 16S rRNA gene copies from a single genome within a cluster varies. The variabily in copy number within a cluster biases copy number correction when only a single value in copy number correction.  Single cluster copy number value is currently the only method used in copy number correction [@Kembel2012,@Angly2014,@Stoddard,@Perisin].  CopyRighter [@Angly2014], attempts to address this issue by defining the cluster copy number correction value proportionally based on the copy number of the species assigned to a cluster.  
+The number of 16S rRNA gene copies from a single genome within a cluster varies. The variabily in copy number within a cluster biases copy number correction when only a single value in copy number correction (`r figr(label = "copyNumVar", prefix = TRUE, link = TRUE, type = "Figure")`).  Single cluster copy number value is currently the only method used in copy number correction [@Kembel2012; @Angly2014; @Stoddard2014; @Perisin2015].  CopyRighter [@Angly2014], attempts to address this issue by defining the cluster copy number correction value proportionally based on the copy number of the species assigned to a cluster.  
 
 ```{r echo = FALSE}
 cluster_copy_number <- cluster_df %>% group_by(threshold, id, gi, count) %>% summarise(size = n()) 
@@ -118,11 +119,11 @@ p <- p + labs( x = "Threshold", fill = "Cluster Type") +
           strip.text = element_text(hjust = 0.02), axis.title.y = element_blank())
 ```
 
-```{r echo = FALSE, fig.cap = "Variability number of 16S rRNA copies for sequences assigned to a cluster by genome. Top plot is the standard deviation of the copy numbers and bottom plot is the proportion of cluster with multiple copy numbers (Mixed), and single copy number values (Uniform)"}
+```{r copyNumVar, anchor="Figure", echo = FALSE, fig.cap = "Variability number of 16S rRNA copies for sequences assigned to a cluster by genome. Top plot is the standard deviation of the copy numbers and bottom plot is the proportion of cluster with multiple copy numbers (Mixed), and single copy number values (Uniform)", fig.height=6,fig.width=6}
 p
 ```
 
-Assignment of 16S rRNA gene sequences from a single genome to multiple clusters further confound the use of single copy nuber correction values. While 16S rRNA gene copies from a single genome are assigned to only one cluster, a number of genomes have 16S rRNA gene sequences assigned to multiple clusters.  Lowering the clustering threshold has little effect on the number of clusters copies of the 16S rRNA gene is assigned to for a genome. The database used in this analysis was generated using only a single method for 16S rRNA gene extraction.  Visualization of the database phylogeny indicates that a number of outlier sequences are included in the database which are likely responsible for a few of the multiple cluster genome sequence copy assignments, especially thoes with mutiple assigned clusters when using lower threshold values.
+Assignment of 16S rRNA gene sequences from a single genome to multiple clusters further confound the use of single copy nuber correction values. While 16S rRNA gene copies from a single genome are assigned to only one cluster, a number of genomes have 16S rRNA gene sequences assigned to multiple clusters (`r figr(label = "ambigAssign", prefix = TRUE, link = TRUE, type = "Figure")`).  Lowering the clustering threshold has little effect on the number of clusters copies of the 16S rRNA gene is assigned to for a genome. The database used in this analysis was generated using only a single method for 16S rRNA gene extraction.  Visualization of the database phylogeny indicates that a number of outlier sequences are included in the database which are likely responsible for a few of the multiple cluster genome sequence copy assignments, especially thoes with mutiple assigned clusters when using lower threshold values.
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 cluster_df_ambig <- cluster_copy_number %>% group_by(threshold, gi) %>% 
@@ -134,7 +135,7 @@ cluster_df_ambig_prop <- cluster_df_ambig %>%
                                    check = sum(prop_n_assigned))
 ```
 
-```{r echo=FALSE, message=FALSE, fig.cap="Proportion of genomes assigned to multiple clusters by clustering threshold."}
+```{r ambigAssign, anchor="Figure", echo=FALSE, message=FALSE, fig.cap="Proportion of genomes assigned to multiple clusters by clustering threshold.", fig.height=4,fig.width=6}
 cluster_df_ambig_prop %>% 
     filter(threshold %in% c("0.70", "0.85", "0.91", "0.94", "0.97", "0.99")) %>% 
     ggplot() + 
@@ -179,9 +180,9 @@ min_ambig_lt97 <- anno_count_fig_df %>% ungroup() %>%
     filter(threshold < 0.97) %>% .$ambig_prop %>% min() %>% round(2)
 ```
 
-Taxonomic for 97% clustering threshold, >5% cluster classification error rate for genus and species level classifications. For clustering thresholds less than 0.97, the proportion of taxonomically ambiguous clusters is greater than `r min_ambig_lt97`. When analyzing 16S rRNA metagenomic datasets, the presence of taxonomically ambiguous clusters must be taken into consideration. 
+Taxonomic ambiguity for 97% clustering threshold, >5% cluster classification error rate for genus and species level classifications (`r figr(label = "taxaAmbig", prefix = TRUE, link = TRUE, type = "Figure")`). For clustering thresholds less than 0.97, the proportion of taxonomically ambiguous clusters is greater than `r min_ambig_lt97`. When analyzing 16S rRNA metagenomic datasets, the presence of taxonomically ambiguous clusters must be taken into consideration. 
 
-```{r echo=FALSE, message=FALSE, fig.cap="Proportion of cluster with more than one assigned taxa by clustering threshold and taxonomic level."}
+```{r taxaAmbig, anchor="Figure", echo=FALSE, message=FALSE, fig.cap="Proportion of cluster with more than one assigned taxa by clustering threshold and taxonomic level.", , fig.height=4,fig.width=6}
 anno_count_fig_df %>%  
     ggplot() + geom_point(aes(x = as.numeric(threshold), y = ambig_prop, color = taxa_level)) +
     geom_line(aes(x = as.numeric(threshold), y = ambig_prop, color = taxa_level)) +
@@ -212,9 +213,9 @@ non_ambig_node_labels <- cluster_97_name_key %>% filter(ambig != "multiple") %>%
     .$rep_name %>% unique()
 ```
 
-The phylogenetic distribution of ambiguous clusters. When clustering at the 0.97 threshold and using genus level taxonomic annotation, sequences belonging to clusters with multiple assigned taxa are distributed throughout the phylogenetic tree. The wide distribution of sequences assigned to ambiguous clusters indicates that ambiguity in cluster taxonomic annotation is challenges taxonomic classification issues for a majority of taxonomic lineages.
+The phylogenetic distribution of ambiguous clusters (`r figr(label = "ambigTree", prefix = TRUE, link = TRUE, type = "Figure")`). When clustering at the 0.97 threshold and using genus level taxonomic annotation, sequences belonging to clusters with multiple assigned taxa are distributed throughout the phylogenetic tree. The wide distribution of sequences assigned to ambiguous clusters indicates that ambiguity in cluster taxonomic annotation is challenges taxonomic classification issues for a majority of taxonomic lineages.
 
-```{r echo=FALSE, message=FALSE, fig.cap="16S rRNA gene phylogeny, teal braches indicate 16S rRNA gene sequences assigned to taxonomically ambiguous clusters, at the 0.97 clustering threshold and genus level taxonomic assignment. To provide better branch resolution in the phyogenetic tree, potential outlier 16S rRNA sequences were exlucded from the phylogenetic tree below"}
+```{r ambigTree, anchor="Figure", echo=FALSE, message=FALSE, fig.cap="16S rRNA gene phylogeny, teal braches indicate 16S rRNA gene sequences assigned to taxonomically ambiguous clusters, at the 0.97 clustering threshold and genus level taxonomic assignment. To provide better branch resolution in the phyogenetic tree, potential outlier 16S rRNA sequences were exlucded from the phylogenetic tree below", fig.height=6,fig.width=6}
 #plot(tree)
 cols <- rainbow_hcl(2)
 tree3 <- groupOTU(tree2, focus=ambig_node_labels)
