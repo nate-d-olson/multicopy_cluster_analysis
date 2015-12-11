@@ -15,17 +15,25 @@ library(purrr)
 library(readr)
 library(ggplot2)
 library(knitr)
+library(ape)
 ```
 
 ## Abstract
-Targeted genomic DNA amplification and sequencing of 16S rRNA is commonly used to characterize microbial communities in terms of identity and quantity. Current methods used to define community composition treat each sequence independently. However, microbial genomes may contain multiple copies of 16S rRNA genes which have diverged in evolution and sequence, which invalidates the assumption that clusters may be treated independently or used to uniquely identify species. Methods to correct for multiple copies only consider the gene copy number and not sequence diversity.  We analyze 16S sequences from 2943 GenBank reference genomes and show that one organism may be represented by many clusters, and that one cluster may also contain multiple species. [[XXX summary statistics]]. A simple set of linear constraints [[XXX may be total rubbish / might save the day and hope for all of humanity]].
+Targeted genomic DNA amplification and sequencing of 16S rRNA is commonly used to characterize microbial communities in terms of identity and quantity. Current methods used to define community composition treat each sequence independently. However, microbial genomes may contain multiple copies of the 16S rRNA gene. Furthermore due to differential selective pressure, the gene sequence can vary between copies. The presence of both multiple different 16S sequences invalidates the assumption that clusters may be treated independently or used to uniquely identify species. Methods to correct for multiple copies only consider the gene copy number and not sequence diversity.  We analyzed 16S rRNA genes sequences from 2943 GenBank reference genomes and show that 16S genes from one organism may be represented by many clusters, and that the number of gene copies in a cluster can vary by strain. 
+Include some kind of results - 5% of ambiguous clusters
+As a initial attempt to develop a method that not only corrects for copy number but also taxonomic classification, we applied a simple set of linear constraints.  The linear constriants were unable to model the copy number mixed taxonomy clusters, we conclude the report with a discussion of other potential models that can be applied to address this issue.
 
 ## Introduction
-Surveys of microbial communities aim to quantify the abundance of constituent microbes through the measurement of amplified segments of genomic DNA. Genes that produce ribosomal RNA, specifically the 16S rRNA sub-sequence, are favored targets for amplification and measurement because their high degree of conservation makes these genes and attractive basis for phylogenetic analysis and taxonomic identification. Thus, these genes are generally favored over other possible sequences despite disadvantages including  [@Vos2012]. In practice, measured sequences are clustered by similarity and these clusters are given a taxonomic identification. Edit distance, or the number of changes required to convert one sequence into another, is useful as a metric of pairwise similarity [@Ghodsi2011]. Clusters are commonly termed as operational taxonomic units (OTUs); OTUs are considered to be proxies for organismal abundance [@Wooley2010].
+Surveys of microbial communities aim to quantify the abundance of constituent microbes through the measurement of amplified segments of genomic DNA. Genes that produce ribosomal RNA, specifically the 16S rRNA sub-sequence, are favored targets for amplification and measurement because their high degree of conservation makes these genes an attractive basis for phylogenetic analysis and taxonomic identification. Thus, these genes are generally favored over other possible sequences despite disadvantages including, __NEED TO STATE DISADVANTAGES__  [@Vos2012]. In practice, measured sequences are clustered by similarity and these clusters are given a taxonomic identification. Edit distance, or the number of changes required to convert one sequence into another, is useful as a metric of pairwise similarity [@Ghodsi2011]. Clusters are commonly termed as operational taxonomic units (OTUs); OTUs are considered to be proxies for organismal abundance [@Wooley2010].
 
-However, 16S sequences are known to be present in multiple copies [@Pei2010] and the presence of paralogous sequences presents the possibility that distantly related sequences may be identified as highly similar [@Koeppel2013]. A number of issues arise from this fact. Firstly, a single organism may be counted multiple times in many unique clusters. Secondly, paralogous (XXX) genes present in multiple species may cluster together, confounding identification; genes from species A may be labeled as species B if both map to a cluster labeled with the taxonomic information of species B.
+However, 16S rRNA sequences are known to be present in multiple copies [@Pei2010] and the presence of paralogous sequences presents the possibility that distantly related sequences may be identified as highly similar [@Koeppel2013]. 
+__Issue with horizontal gene transfer__
+A number of issues arise from this fact. Firstly, a single organism may be counted multiple times in many unique clusters. Secondly, paralogous (XXX) genes present in multiple species may cluster together, confounding identification; genes from species A may be labeled as species B if both map to a cluster labeled with the taxonomic information of species B.
+
+__Potential diagram of copy number issue__
 
 * Other studies that have characterized multi-copies
+    * 
 * Available methods correcting for gene copy number
 
 + Sequence matching
@@ -44,73 +52,9 @@ http://bergelson.uchicago.edu/?p=886
 
 
 ## Methods
-We downloaded 2943 microbial genomes from GenBank (Benson et al. 2000). 16S sequences were extracted using rnammer (http://www.cbs.dtu.dk/cgi-bin/sw_request?rnammer)[@Lagesen2007]. Duplicate genomes were removed using script XXX and sequences were indexed according to the GenInfo Identifier (gi) each read’s respective source genome. These sequences were then XXX.
+We downloaded 2943 microbial genomes and their taxonomic information from NCBI RefSeq (ftp://ftp.ncbi.nlm.nih.gov/genomes/Bacteria) __(Benson et al. 2000)__. 16S rRNA gene sequences were extracted from the genomes using rnammer (http://www.cbs.dtu.dk/cgi-bin/sw_request?rnammer)[@Lagesen2007]. The extracted 16S rRNA genes were clustered with dnaclust [@Ghodsi2011]. THe sequences were clustered for a range of threshold values, where similarity scores for all pairwise comparisons of sequences within a cluster must be above the threshold value. Similarity score equals 1 - (edit distance)/length(shortest string), and ranges from 0 to 1. Typical threshold values used in 16S rRNA metagenomic studies range from 0.95 to 0.99; however, we investigate thresholds as low as 0.61 and as high as 1.00. 
 
-Extracted sequences were then clustered using DNAClust [@Ghodsi2011] to determine OTU mapping of each sequence. Clustering was evaluated at various threshold values, where similarity score of each sequence must be above the threshold value to be admitted to a cluster. Similarity score equals 1 - (edit distance)/length[shortest string], and ranges from 0 to 1. Typical threshold values for 16S clusters range from 0.95 to 0.99; however, we investigate thresholds as low as 0.61 and as high as 1.00. 
-
-
-XXX Nate, do you know what you want to say about diversity analysis?
-
-## Methods
-### Generating 16S Copy Database
-* Downloaded reference genomes from NCBI RefSeq (ftp://ftp.ncbi.nlm.nih.gov/genomes/Bacteria)
-
-* Extracted 16S rRNA gene sequences from whole genomes using rnammer (http://www.cbs.dtu.dk/cgi-bin/sw_request?rnammer)[@Lagesen2007].
-
-```
-extract_16S(){
-    prefix=$(echo $fa | sed 's/.fna//')
-    if [ ! -e "$prefix.fasta" ]
-    then
-        echo $prefix
-        rnammer -S bacterial -m ssu -xml $prefix-16S.xml -gff $prefix-16S.gff -f $prefix-16S.fasta < $fa
-    fi
-}
-
-N=8
-(
-for fa in */*fna; do 
-   ((i=i%N)); ((i++==0)) && wait
-   extract_16S "$fa" & 
-done
-)
-```
-
-
-* Annotated Sequences with NCBI taxonomy database
-    * Generate taxonomic database using the taxit python package (http://fhcrc.github.io/taxtastic/index.html), database created on 11/30/2015.
-    * `taxit new_database -d ncbi_taxa_db.sqlite`
-```
-16S-multicopy-cluster-annotation.Rmd
-```
-
-### Clustering 16S sequences
-* Sequences clustered using dnaclust (http://dnaclust.sourceforge.net/)[@Ghodsi2011]
-    - Sequences clustered at multiple thresholds, to relate to different taxonomic levels
-```
-for i in 1.00 0.99 0.97 0.94 0.91 0.88 0.85 0.82 0.79 0.76 0.73 0.70 0.67 0.64 0.61;
-do 
-    ../dnaclust_repo_release3/dnaclust -d -l -t 8 -e 999 -i all_refseq_16S.fasta -s $i > all_refseq_16S_$i.cluster
-done
-```
-
-
-### Multiple Sequence alignment and phylogenetic analysis
-* Multiple sequence alignment performed using infernal [@Nawrocki2013].
-    - Reference alignment for bacterial small subunit rRNA [http://rfam.xfam.org](http://rfam.xfam.org/family/SSU_rRNA_bacteria?tab=alignBlock#tabview=tab2).
-
-```
-cmalign --verbose --ifile info.txt --elfile seq_el.txt --sfile score.txt --tfile parsetrees.txt -o ../infernal_aligned/cmd_line_infernal_1.1.fasta --cpu 7 --mxsize 5000 --informat FASTA --dnaout RF00177.cm ../remove_replicate_seqs/no_dups.fasta
-```
-
-### Phylogenetic tree construction
-* Generation of phlyogenetic tree using RAxML (http://sco.h-its.org/exelixis/web/software/raxml/index.html)[@Stamatakis2014], based on methods used by [@Kembel2012].
-
-```
-esl-reformat --rename ID phylip infernal_filtered/cmd_line_infernal_1.1_pfiltered.fasta > infernal_filtered/cmd_line_infernal_1.1.pfiltered.phylip
-
-raxmlHPC-PTHREADS-SSE3 -m GTRGAMMA -T 7 -p 16 -n infernal_16S_tree -s infernal_filtered/cmd_line_infernal_1.1.pfiltered.phylip
-```
+See `multicopy_taxa_code.pdf` detailed methods including bash scripts and commands.
 
 ## Results
 ### Summary of Dataset
@@ -119,35 +63,56 @@ cluster_df <- read_tsv("refseq_clusters/cluster_genome_count.tsv") %>% filter(!i
     separate(cluster, c("clus","threshold","id"),  "_",remove = FALSE) %>% select(-clus)
 ```
 
-
-Number of 16S rRNA gene copies per genome
 ```{r echo=FALSE, message=FALSE}
 copy_count <- cluster_df %>%
     filter(threshold == "1.00") %>% 
     group_by(gi) %>% summarize(copies = n())
 ```
 
+Number of 16S rRNA gene copies per genome ranged from `r min(copy_count$copies)` to `r max(copy_count$copies)` with a median of `r median(copy_count$copies)`.
+
 ```{r}
+## Potentially drop plot, try to incorporate results into other figure
 ggplot(copy_count) + geom_bar(aes(x = copies)) + 
     theme_bw() + labs(y = "Number of Genomes", x = "16S rRNA Gene Copies")
 ```
 
 * 16S rRNA gene sequence diversity
+
+```{r}
+tree <- read.tree("infernal_raxml_tree/RAxML_result.infernal_16S_tree")
+plot.phylo(tree)
+tree_dist <- cophenetic.phylo(tree)
+tree_dist_long <- tree_dist %>% as.data.frame() %>% 
+    mutate(ID1 = rownames(tree_dist)) %>% gather(ID2, dist, -ID1)
+```
+
+```{r}
+name_key <- read_tsv("name_key.tsv")
+
+```
+
+Next steps
+Convert IDs to seq names
+Address duplicate issues
+
+Potentially filter outliers?
+
     * scatter/ boxplot
         * y-axis = within genome diversity /similarity
         * x-axis = taxa levels
         * use boxplots to show level diversity summary
         
 ### Clustering
+The extracted 16S rRNA genes were clustered with dnaclust using a range of threshold values from 1.00 (identical gene sequences) to 0.61 (sequences with 61% similarity). The number of sequences assigned to a cluster was correlated with the clustering threshold.  For lower clustering (< 0.73) thresholds the majority of the sequences were assigned to a single cluster.
 
-    * breakdown of number of clusters
-    * sequences assigned per cluster
-
-Number of sequences in each cluster
-```{r}
+```{r echo = FALSE}
 cluster_df_size <- cluster_df %>% group_by(threshold, id) %>% summarise(size = n()) 
 ```
 
+```{r}
+cor.test(x = cluster_df_size$size,y = as.numeric(cluster_df_size$threshold))
+```
 
 ```{r}
 ggplot(cluster_df_size) + geom_boxplot(aes(x = threshold, y = size)) + 
@@ -159,49 +124,92 @@ Number of gene copies per genome by cluster
 ```{r}
 cluster_copy_number <- cluster_df %>% group_by(threshold, id, gi, count) %>% summarise(size = n()) 
     # check size should equal count
-with(cluster_copy_number, sum(!(count == size)))
+#with(cluster_copy_number, sum(!(count == size)))
 ## checks out
 cluster_copy_number %<>% select(-size) 
 ```
 
-Variability in the number of 16S copies in a genome per cluster.  This variability leads to biases when only a single value is used to correct abundance values for a cluster.  
-Proportion of clusters with multiple copy number values.
+Variability in the number of 16S copies in a genome per cluster.  Variability in copy number within a cluster biases copy number correction when only a single value in copy number correction.  
+
 ```{r}
-cluster_copy_number %>% 
-    group_by(threshold, id) %>% 
-    summarize(number_sd =sd(count)) %>%
-    mutate(mixed_count = ifelse(number_sd == 0 | is.na(number_sd), "Uniform", "Mix")) %>% 
-ggplot() + geom_bar(aes(x = threshold, fill = mixed_count), position ="fill") + theme_bw() + labs(fill = "Copy Number", x = "Clustering Threshold", y = "Proportion of Clusters")
+# cluster_copy_number %>% 
+#     group_by(threshold, id) %>% 
+#     summarize(number_sd =sd(count)) %>%
+#     mutate(mixed_count = ifelse(number_sd == 0 | is.na(number_sd), "Uniform", "Mix")) %>% 
+# ggplot() + geom_bar(aes(x = threshold, fill = mixed_count), position ="fill") + theme_bw()+ labs(fill = "Copy Number", x = "Clustering Threshold", y = "Proportion of Clusters")
 ```
 
 Variability in copy number values
-```{r}
-cluster_copy_number %>% 
-    group_by(threshold, id) %>% 
-    summarize(number_sd =sd(count)) %>%
-    filter(number_sd > 0, !is.na(number_sd)) %>% 
-ggplot() + geom_jitter(aes(x = threshold,y = number_sd), position = position_jitter(width = 0.5)) + 
-    theme_bw() + labs(x = "Clustering Threshold", y = "Standard Deviation Copies per Genome")
+```{r echo = FALSE}
+# cluster_copy_number %>% 
+#     group_by(threshold, id) %>% 
+#     summarize(number_sd =sd(count)) %>%
+#     filter(number_sd > 0, !is.na(number_sd)) %>% 
+# ggplot() + geom_jitter(aes(x = threshold,y = number_sd), position = position_jitter(width = 0.5)) + 
+#     theme_bw() + labs(x = "Clustering Threshold", y = "Standard Deviation Copies per Genome")
 ```
+
+```{r echo = FALSE}
+# cluster_copy_number %>% 
+#     group_by(threshold, id) %>% 
+#     summarize(number_sd =sd(count)) %>%
+#     mutate(mixed_count = ifelse(number_sd == 0 | is.na(number_sd), "Uniform", "Mix")) %>% 
+#     #gather(pl_type, x, -threshold, -id) %>% 
+#     filter(number_sd > 0 & !is.na(x), x != "Uniform") %>% 
+#   ggplot() + geom_bar(aes(x = threshold, fill = mixed_count)) +geom_jitter(aes(x = threshold,y = number_sd), position = position_jitter(width = 0.5)) + theme_bw()+ labs(fill = "Copy Number", x = "Clustering Threshold", y = "Proportion of Clusters")  #+ facet_grid(pl_type~., scale = "free_y")
+```
+
+```{r echo = FALSE}
+d1 <- cluster_copy_number %>% 
+    group_by(threshold, id) %>% 
+    summarize(number_sd =sd(count)) %>% 
+    mutate(mixed_count = ifelse(number_sd == 0 | is.na(number_sd), 
+                                "Uniform", "Mixed"))
+d2 <- d1 %>% filter(number_sd > 0 & !is.na(number_sd))
+d1$panel <- "Proportion"
+d2$panel <- "Copy Number Standard Deviation"
+
+d <- bind_rows(d1, d2)
+
+p <- ggplot(data = d) + theme_bw()
+p <- p + facet_wrap(~panel, ncol = 1, scale="free_y")
+p <- p + geom_bar(data = d1, aes(x = threshold, fill = mixed_count), position = "fill")
+p <- p + geom_jitter(data = d2, aes(x = threshold, y = number_sd), 
+                     position = position_jitter(width = 0.5)) 
+p <- p + labs( x = "Threshold", fill = "Cluster Type") + 
+    theme(legend.position = "bottom", legend.direction = "horizontal", 
+          strip.text = element_text(hjust = 0.02), axis.title.y = element_blank())
+```
+
+```{r echo = FALSE, fig.cap = "Variability number of 16S rRNA copies for sequences assigned to a cluster by genome. Top plot is the standard deviation of the copy numbers and bottom plot is the proportion of cluster with multiple copy numbers (Mixed), and single copy number values (Uniform)"}
+p
+```
+
 
 Ambiguous clusters, clusters with more than one genome assigned
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 cluster_df_ambig <- cluster_copy_number %>% group_by(threshold, gi) %>% 
     summarise(n_assigned = n()) %>% 
-    mutate(ambig = ifelse(n_assigned > 1, "multiple","single"))
+    mutate(ambig = ifelse(n_assigned > 1, "> 1","1"))
 ```
 
 Proportion of genomes with 16S rRNA gene copies assigned to more than one cluster.
 ```{r}
-cluster_df_ambig %>% ggplot() +
-    geom_bar(aes(x = threshold, fill = ambig)) + theme_bw() + 
-    labs(x = "Clustering Threshold", y = "Number of Genomes")
+cluster_df_ambig %>% 
+    ggplot() +
+        geom_bar(aes(x = threshold, fill = ambig)) + theme_bw() + 
+        labs(x = "Clustering Threshold", y = "Number of Genomes", fill = "Assigned Clusters") +
+    theme(legend.position = "bottom", legend.direction = "horizontal")
 ```
 
 Number of clusters assigned, for genomes with more than one assigned gene copy.
 ```{r}
-cluster_df_ambig %>% filter(n_assigned > 1) %>% 
-    ggplot() + geom_bar(aes(x = threshold, fill = factor(n_assigned))) + theme_bw() + labs(x = "Clustering Threshold", y = "Number of Genomes", fill = "Number of Assigned Clusters")
+cluster_df_ambig %>% filter(n_assigned > 1, threshold != "1.00") %>% 
+    ggplot() + 
+        geom_bar(aes(x = threshold, fill = factor(n_assigned))) + 
+        theme_bw() + labs(x = "Clustering Threshold", 
+                          y = "Number of Genomes", 
+                          fill = "Number of Assigned Clusters")
 ```
 
 Taxonomic breakdown of clusters
@@ -223,7 +231,9 @@ thresholds <- cluster_df_size$threshold %>% unique() %>% as.numeric() %>% .[-15]
 
 Taxonomic for 97% clustering threshold, >5% cluster classification error rate for genus and species level classifications.
 ```{r echo=FALSE, message=FALSE}
-cluster_df_anno_count %>% group_by(threshold, taxa_level, ambig) %>% summarise(ambig_count = n()) %>% group_by(threshold,taxa_level) %>% mutate(ambig_prop = ambig_count/sum(ambig_count)) %>% 
+cluster_df_anno_count %>% group_by(threshold, taxa_level, ambig) %>% 
+    summarise(ambig_count = n()) %>% group_by(threshold,taxa_level) %>%
+    mutate(ambig_prop = ambig_count/sum(ambig_count)) %>% 
     filter(threshold != "1.00", 
                !(taxa_level %in% c("gi","taxid")),
                ambig == "multiple") %>% 
@@ -235,18 +245,73 @@ cluster_df_anno_count %>% group_by(threshold, taxa_level, ambig) %>% summarise(a
     geom_hline(aes(yintercept = 0.05), linetype = 2, color = "grey40") + theme(legend.position = "bottom")
 ```
 
+Combination of copy number and taxonomic ambiguity
+```{r}
+# ## Taxa ambiguous clusters assigned a value of 1 and non-ambiguous a value of 0
+# cluster_taxa_ambig <- cluster_df_anno_count %>% 
+#     group_by(threshold, taxa_level, ambig) %>% 
+#     summarise(n_taxa = n()) %>% mutate(taxa_ambig = ifelse(n_taxa > 1, 1,0))
+# 
+# ## Copy number ambiguous clusters assigned a value of 2 and non-ambiguous a value of 0
+# cluster_copy_ambig <- cluster_copy_number %>% group_by(threshold, gi) %>% 
+#     summarise(n_copy = n()) %>% 
+#     mutate(copy_ambig = ifelse(n_copy > 1, 2,0))
+# 
+# ## Cluster ambiguous for both ambig value of 3
+# cluster_ambig <- full_join(cluster_taxa_ambig, cluster_copy_ambig) %>% 
+#     rowwise() %>% mutate(ambig = copy_ambig + taxa_ambig)
+```
+
+```{r}
+# cluster_ambig %>% group_by(threshold, taxa_level, ambig) %>% summarise(ambig_count = n()) %>% group_by(threshold,taxa_level,ambig) %>% mutate(ambig_prop = ambig_count/sum(ambig_count)) %>% 
+#     filter(threshold != "1.00", 
+#                !(taxa_level %in% c("gi","taxid")),
+#                ambig == "multiple") %>% 
+#     ggplot() + geom_point(aes(x = as.numeric(threshold), y = ambig_prop, color = taxa_level)) +
+#     geom_line(aes(x = as.numeric(threshold), y = ambig_prop, color = taxa_level)) +
+#     scale_x_continuous(breaks = thresholds, 
+#                        labels = thresholds) +
+#     theme_bw() + labs(x = "Cluster Threshold", y = "Proportion of Clusters", color = "Taxonomic Level") +
+#     geom_hline(aes(yintercept = 0.05), linetype = 2, color = "grey40") + theme(legend.position = "bottom")
+```
+
+Want to try and generate a similar figure showing both clusters with both copy number ambiguity and taxonomic ambiguity.
+```{r}
+# cluster_taxa <- taxaID %>% 
+#     separate(cluster, c("clus","threshold","id"),"_") %>% 
+#     select(-clus, -seq_names) %>% left_join(cluster_copy_number)
+# cluster_taxa_copy_ambig <- cluster_taxa %>% group_by(threshold, id) %>% 
+#     mutate(unique_copy_num = count %>% length() %>% unique(),
+#            ambig_copy = ifelse(unique_copy_num > 1, 2,0))
+# cluster_taxa_copy_both_ambig <- cluster_taxa_copy_ambig %>% 
+#     gather(taxa_level, taxa, -threshold, -id, -seqs, -unique_copy_num, -ambig_copy, -count) %>%  
+#     group_by(threshold, id, taxa_level) %>% 
+#     mutate(taxa_count = length(unique(taxa))) %>% 
+#     mutate(ambig_taxa = ifelse(taxa_count > 1, 1,0))
+# cluster_taxa_copy_both_ambig %>% group_by(threshold, id, count, taxa_level, ambig_copy, ambig_taxa) %>% 
+#     summarise(ambig = n(), ambig_type = list(ambig_copy + ambig_taxa), ambig_length = length(ambig_type))
+# #ambig_copy + ambig_taxa) %>% group_by(threshold, taxa_level, ambig) %>% summarise(count = n()) %>% group_by(threshold, taxa_level) %>% mutate(prop = count/sum(count))
+```
+
+
 Phylogenetic tree - showing relationship between clusters and taxa assignments
 
 
 
 ## Discussion
-* Brief summary of findings
-* Comparison of copy number results to published results
-* When copy number correction can be applied
+* Brief summary of findings  
+* Comparison of copy number results to published results  
+* When copy number correction can be applied  
+* Issues - better methods for 16S extraction, CopyRighter    
+* Limitations only using closed genomes - diversity  
+    * 16Stimator method for getting copy number from draft assemblies, does not extract sequences
+* Methods for correcting for copy number, primarily use single values, or proprtions for mixed copies, no methods to address taxonomic ambiguity - potential method for dealing with horizontal gene transfer.  
+
+
 ### When copy number correction does not work - ambiguous clusters
-* Primer regions
-    * This work focuses on the whole 16S gene
-    * What are the expected results for single gene copies????
+* Primer regions  
+    * This work focuses on the whole 16S gene  
+    * What are the expected results for single gene copies????  
 
 ### Recommendations
 A number of approaches may use reference-based 16S multicopy information to guide taxonomic binning. If one assumes consistent and unbiased detection of 16S PCR products, the relationship between clustered OTUs 1..n and reference based counts of species 1..m is:
