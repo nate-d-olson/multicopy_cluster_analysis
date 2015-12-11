@@ -1,0 +1,194 @@
+---
+title: "16S rRNA Multi-Copy Cluster and Analysis Code"
+author: "Nate Olson and Ethan Ertel"
+date: "December 10, 2015"
+output: html_document
+bibliography: bibliography.bib
+---
+
+## Methods
+### Generating 16S Copy Database
+* Downloaded reference genomes from NCBI RefSeq (ftp://ftp.ncbi.nlm.nih.gov/genomes/Bacteria)
+
+* Extracted 16S rRNA gene sequences from whole genomes using rnammer (http://www.cbs.dtu.dk/cgi-bin/sw_request?rnammer)[@Lagesen2007].
+
+```
+extract_16S(){
+    prefix=$(echo $fa | sed 's/.fna//')
+    if [ ! -e "$prefix.fasta" ]
+    then
+        echo $prefix
+        rnammer -S bacterial -m ssu \
+            -xml $prefix-16S.xml -gff $prefix-16S.gff -f $prefix-16S.fasta < $fa
+    fi
+}
+
+N=8
+(
+for fa in */*fna; do 
+   ((i=i%N)); ((i++==0)) && wait
+   extract_16S "$fa" & 
+done
+)
+```
+
+### Clustering 16S rRNA gene copies
+Sequences clustered using dnaclust (http://dnaclust.sourceforge.net/)[@Ghodsi2011]
+```
+for i in 1.00 0.99 0.97 0.94 0.91 0.88 0.85 \
+            0.82 0.79 0.76 0.73 0.70 0.67 0.64 0.61;
+do 
+    ../dnaclust_repo_release3/dnaclust -d -l \
+        -t 8 -e 999 -i all_refseq_16S.fasta -s $i \
+            > all_refseq_16S_$i.cluster
+done
+```
+
+### Cluster Taxonomic Annotation
+The 16S rRNA clusters were then annotated in R using the following procedure;
+1. Generating taxonomic database 
+1. Extracting GIs - genome identifier was retrieved for each extracted gene copy sequence.  
+2. Generating Taxonomic Heirarchy - for each GI the kingdom, phylum, class, order, family, genus, and species taxanomic ids were retrieved from the database.  
+3. Annotating Clusters - combining taxonomic annotation and cluster data
+
+#### Generating taxonomic database
+The 16S rRNA gene sequences were annotated using the NCBI taxonomy database. An SQLite database was first generated using the taxit python package (http://fhcrc.github.io/taxtastic/index.html), database created on 11/30/2015.
+```
+taxit new_database -d ncbi_taxa_db.sqlite
+```
+
+#### Extracting GIs
+
+```{r eval=FALSE}
+library(Biostrings)
+library(magrittr)
+setwd("~/multicopy_taxa_assignment")
+copy_db <- readDNAStringSet("~/multicopy_taxa_assignment/refseq_clusters/all_refseq_16S.fasta")
+seq_names <- names(copy_db)
+library(stringr)
+nuc_id <- seq_names %>% 
+    str_extract('ref\\|.*\\|') %>% 
+    str_replace("ref","") %>% str_replace_all("\\|","")
+uniq_nuc_id <- unique(nuc_id)
+seq_gi <- seq_names %>% 
+    str_extract('gi\\|.*\\|ref') %>% 
+    str_replace_all("gi\\|","") %>% str_replace_all("\\|ref","")
+uniq_seq_gi <- unique(seq_gi) %>% as.numeric()
+```
+
+```{r eval=FALSE}
+library(dplyr)
+ncbi_tax_id <- src_sqlite(path = "/Volumes/Transcend/genomic_purity/data/ncbi_taxa_db/ncbi_taxa.sqlite")
+gi_id <- tbl(ncbi_tax_id,"gi_taxid")
+ncbi_nodes <- tbl(ncbi_tax_id,"nodes")
+ncbi_names <- tbl(ncbi_tax_id,"names")
+gi_tbl <- gi_id %>% filter(gi %in% uniq_seq_gi) %>% collect()
+```
+
+#### Generate Taxanomic Heirarchy
+
+```{r eval=FALSE}
+root <- FALSE
+tax_ids <- gi_tbl$taxid %>% unique()
+taxonomy_table <- data_frame()
+while(length(tax_ids) > 1){
+    temp_tbl <- ncbi_nodes %>% 
+        filter(tax_id %in% tax_ids) %>% 
+        select(tax_id, parent_id, rank) %>% 
+        collect()
+    tax_ids <- temp_tbl$parent_id %>% unique()
+    taxonomy_table <-  bind_rows(taxonomy_table, temp_tbl)
+}
+```
+
+
+```{r eval=FALSE}
+# Retrieving taxonomic names, only keeping scientific names
+tax_ids <- taxonomy_table$tax_id %>% unique()
+names_table <- filter(ncbi_names, tax_id %in% tax_ids) %>% collect() %>% filter(name_class == "scientific name")
+```
+
+```{r eval=FALSE}
+library(purrr)
+taxonomy_table  %<>% unique()
+get_heirarchy <- function(query_id, query_lineage, tax_tbl = taxonomy_table){
+    query_lineage <-list()
+    parent <- taxonomy_table %>% filter(tax_id == query_id)
+    taxa_levels <- c("kingdom", "phylum", "class", 
+                     "order", "family", "genus", "species")
+    if(parent$rank %in% taxa_levels){
+        query_lineage[parent$rank] <- parent$tax_id
+    }
+    if(parent$rank == "kingdom" | query_id == "1"){
+        return(as_data_frame(query_lineage))
+    }
+    
+    query_lineage <- c(query_lineage, get_heirarchy(parent$parent_id, query_lineage))
+    return(as_data_frame(query_lineage))
+}
+
+lineage_df <- gi_tbl$taxid %>% unique() %>% map(get_heirarchy)
+lin_df <- lineage_df %>% bind_rows() %>% 
+    mutate(taxid = gi_tbl$taxid %>% unique()) %>% right_join(gi_tbl)
+```
+
+Appending sequence names
+```{r eval=FALSE}
+seq_lineage_df <- data_frame(gi = as.integer(seq_gi), seq_names) %>% left_join(lin_df)
+```
+
+#### Annotating Cluster Assignment with Taxonomy
+Data frame with cluster ids and seqs
+```{r eval=FALSE}
+library(readr)
+anno_cluster_df <- data_frame()
+for(i in c("1.00", "0.99", "0.97", "0.94", "0.91", "0.88", 
+           "0.85", "0.82", "0.79", "0.76", "0.73", "0.70", 
+           "0.67", "0.64", "0.61")){
+    cluster_file <- paste0("refseq_clusters/all_refseq_16S_",i,".cluster")
+    cluster_set <- read_lines(cluster_file, skip = 1) %>%
+        as.list() %>% flatmap(str_split,"\t")
+    names(cluster_set) <- paste0("cluster_",i,"_",1:length(cluster_set))
+    cluster_names <- cluster_set  %>% map(length)  %>% 
+        unlist()  %>% rep(names(cluster_set), .)
+    cluster_seqs <- cluster_set  %>% as_vector(.type = "character")
+    cluster_df <- data_frame(cluster = cluster_names, seqs = cluster_seqs)
+    anno_cluster_df <- seq_lineage_df %>% 
+        mutate(seqs= str_replace(seq_names, " .*","")) %>% 
+        right_join(cluster_df) %>% 
+        bind_rows(anno_cluster_df)
+}
+
+glimpse(anno_cluster_df)
+## Writing annotated clusters to file
+write_csv(anno_cluster_df, "~/Desktop/clusters_with_taxonomic_annotation.csv")
+```
+
+
+### Multiple Sequence Alignment and Phylogenetic Analysis
+Multiple sequence alignment and phylogeny reconstruction methods used were based on thoes use in __REF__
+* Multiple sequence alignment performed using infernal [@Nawrocki2013] using the reference alignment for bacterial small subunit rRNA [http://rfam.xfam.org](http://rfam.xfam.org/family/SSU_rRNA_bacteria?tab=alignBlock#tabview=tab2). 
+
+```
+cmalign --verbose --cpu 7 --mxsize 5000 \
+        --informat FASTA --dnaout RF00177.cm \
+        --ifile info.txt --elfile seq_el.txt \
+        --sfile score.txt --tfile parsetrees.txt \
+        -o ../infernal_aligned/cmd_line_infernal_1.1.fasta \
+        ../remove_replicate_seqs/no_dups.fasta
+```
+
+* Generation of phlyogenetic tree using RAxML (http://sco.h-its.org/exelixis/web/software/raxml/index.html)[@Stamatakis2014], based on methods used by [@Kembel2012].
+
+```
+# converting file format
+esl-reformat --rename ID \
+    phylip infernal_filtered/cmd_line_infernal_1.1_pfiltered.fasta \
+    > infernal_filtered/cmd_line_infernal_1.1.pfiltered.phylip
+
+# Building phylogenetic tree
+raxmlHPC-PTHREADS-SSE3 -m GTRGAMMA -T 7 -p 16 -n infernal_16S_tree \
+    -s infernal_filtered/cmd_line_infernal_1.1.pfiltered.phylip
+```
+
+## References
