@@ -34,9 +34,7 @@ opts_chunk$set(cache=TRUE)
 ```
 
 ## Abstract
-Targeted genomic DNA amplification and sequencing of 16S rRNA is commonly used to characterize microbial communities in terms of identity and quantity. Current methods used to define community composition treat each sequence independently. However, microbial genomes may contain multiple copies of the 16S rRNA gene. Furthermore due to differential selective pressure, the gene sequence can vary between copies. The presence of both multiple different 16S sequences invalidates the assumption that clusters may be treated independently or used to uniquely identify species. Methods to correct for multiple copies only consider the gene copy number and not sequence diversity.  We analyzed 16S rRNA genes sequences from 2943 GenBank reference genomes and show that 16S genes from one organism may be represented by many clusters, and that the number of gene copies in a cluster can vary by strain. 
-Include some kind of results - 5% of ambiguous clusters
-As a initial attempt to develop a method that not only corrects for copy number but also taxonomic classification, we applied a simple set of linear constraints.  The linear constriants were unable to model the copy number mixed taxonomy clusters, we conclude the report with a discussion of other potential models that can be applied to address this issue.
+Targeted genomic DNA amplification and sequencing of 16S rRNA is commonly used to characterize microbial communities in terms of identity and quantity. Current methods used to define community composition treat each sequence independently. However, microbial genomes may contain multiple copies of the 16S rRNA gene. Furthermore due to differential selective pressure, the gene sequence can vary between copies. The presence of both multiple different 16S sequences invalidates the assumption that clusters may be treated independently or used to uniquely identify species. Methods to correct for multiple copies only consider the gene copy number and not sequence diversity.  We analyzed 16S rRNA genes sequences from 2943 GenBank reference genomes and show that 16S genes from one organism may be represented by many clusters, and that the number of gene copies in a cluster can vary by strain. As a initial attempt to develop a method that not only corrects for copy number but also taxonomic classification, we applied a simple set of linear constraints.  The linear constriants were unable to model the copy number mixed taxonomy clusters, we conclude the report with a discussion of other potential models that can be applied to address this issue.
 
 ## Introduction
 Microbial community surveys aim to characterize the identity and abundance of prokaryotic organisms within a sample. One method for characterizing microbial communinties is by selectively sequencing the marker genes from prokaryotic genomes in the sample. Genes that produce ribosomal RNA, specifically the 16S rRNA gene, is most commonly marker gene because as it contain both conserved and variable regions which faciliate amplification and taxonomic identification respectively [@Wooley2010]. Thus, these genes are generally favored over other possible sequences despite disadvantages including, multiple gene copies within a genome and taxonomic ambiguity due to horizontal gene transfer [@Vos2012].
@@ -224,17 +222,46 @@ ggtree(tree3, layout="circular", aes(color=group)) + scale_color_manual(values =
     theme(legend.position="bottom")
 ```
 
+
+\pagebreak
+
+
 ### Resolving Copy Number and Taxonomic Cluster Ambiguity
 
-A number of approaches may use reference-based 16S multicopy information to guide taxonomic binning. If one assumes consistent and unbiased detection of 16S PCR products, the relationship between clustered OTUs 1..n and reference based counts of species 1..m is:
- Equation (XXX): A simple linear relationship between 16S rRNA copy and species count underlies the physical system
-Organism identification could simply be treated as a linear optimization problem under these conditions if a suitable objective function c is defined. 
+A number of approaches may use reference-based 16S multicopy information to guide taxonomic binning. If one assumes consistent and unbiased detection of 16S PCR products, the relationship between clustered OTUs $1..n$ and reference based counts of species $1..m$ follows the structure presented in Equation 1.
 
-However, several major shortcomings hinder the success of this naive approach. PCR amplification is not uniform or linear, and so certain sequences will be overrepresented in such a way that the linear relationships no longer hold. In addition, the number of different OTUs detected is known to be a function of sequencing depth [@Paulson2013]. Finally, the prediction of species counts is biased by the numbers and types of species present in the GenBank reference database. 
+$$ \begin{bmatrix}
+  copy_{OTU\#1,Species\#1} & ... & copy_{OTU\#1,Species\#m} \\
+  \vdots & \ddots & \vdots  \\
+  copy_{OTU\#n,Species\#1} & ... & copy_{OTU\#n,Species\#m}
+ \end{bmatrix}
+\begin{bmatrix}
+  count_{Species\#1}\\
+  \vdots  \\
+  count_{Species\#m}
+ \end{bmatrix}
+=
+\begin{bmatrix}
+  count_{OTU\#1}\\
+  \vdots  \\
+  count_{OTU\#n}
+ \end{bmatrix}
+$$
 
-An alternative approach is to use 
+    
+> **Equation 1** A simple linear relationship between 16S rRNA copy and species count underlies the physical system
+
+In ideal conditions, organism identification and cluster disambiguation could be treated as a linear optimization problem under these conditions by defining a suitable objective function ($c$). Even in this case, the $n$ by $m$ matrix on the left hand side of this equation represents a very high dimensional and sparse space that will in a vast majority of situations have multiple optimal solutions. So, the linear optimization approach to multicopy guided taxon quantification may have limitations even under ideal measurement conditions.
+
+Several other major shortcomings hinder the success of this naive approach. PCR amplification is not uniform or linear, and so certain sequences will be overrepresented in such a way that the linear relationships no longer hold. In addition, the number of different OTUs detected is known to be a function of sequencing depth [@Paulson2013]. Finally, the prediction of species counts is biased by the numbers and types of species present in the GenBank reference database. 
+
+One possible structure of the relationship between measured counts and taxa present is given in Equation 2. Using a relationship of this type requires a substantial amount of careful work and a great deal of additional data for the purpose of estimating parameters with each taxon-OTU pairing. Additional mathematical work is required to determine effective estimators for each parameter and formulation the problem more specifically.
+
+$$E \left [ count_{OTU\#i} \right ] = E \left [ \sum_{j=1}^{m}PD_{ij}(depth) \cdot \left( c_{ij}+\epsilon\right ) \cdot x_{j} \right ] $$
+
+> **Equation 2** The expected number of sequences in OTU $i$ equals the sum of the weighted expectation for each component mapping to OTU $i$. These expectations depend on $PD_{ij}$ (the probability of detection in a transcript from species $j$), number of copies of the relevant sequence, and statistical noise in the observation.
 
 
-Equation (XXX): The expected number of sequences in OTU i equals the sum of the weighted expectation for each component mapping to OTU i. These expectations depend on PDij (the probability of detection in a transcript from species j), number of copies of the relevant sequence, and statistical noise in the observation.
+An alternative solution is to approach taxon estimation through the lens of expectation maximation, similar to an approach used for RNA-Seq quantification[@Patro2014]. OTUs may be collapsed into OTU equivalence classes, consisting of taxa mapping to an OTU sequence which have similar copy number of 16S sequences clustered to that OTU. 
 
 ## References
