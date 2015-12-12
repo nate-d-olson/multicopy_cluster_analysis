@@ -6,5 +6,6 @@ infernal_aligned/RF00177.cm
 infernal_aligned/parsetrees.txt
 ncbi_taxa_db/gi_taxid_nucl*
 ncbi_taxa_db/*sqlite
-
+nchi_taxa_db/taxdmp.zip
+refseq_genomes/all.fna.tar.gz
 .Rproj.user
