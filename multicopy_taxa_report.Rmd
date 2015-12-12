@@ -144,7 +144,7 @@ cluster_df_ambig_prop %>%
                        fill = factor(n_assigned)), 
                    position = position_jitterdodge()) + 
         theme_bw() + labs(x = "Clustering Threshold", 
-                          y = "Proportion of Genomes", 
+                          y = "Number of Genomes", 
                           color = "Number of Assigned Clusters") +
         scale_fill_discrete(guide = "none") +
         scale_y_log10(breaks = c(1, 5, 10, 50, 100, 500, 1000, 3000)) +
